@@ -1,0 +1,11 @@
+﻿<html>
+<script src="jsencrypt.min.js"></script>
+<script src="login.js"></script>
+<script>
+var publicKey = login.pubkey;
+var encrypt = new JSEncrypt();
+encrypt.setPublicKey(publicKey);
+var password = encrypt.encrypt("f123456");
+document.write(password);
+</script>
+</html>

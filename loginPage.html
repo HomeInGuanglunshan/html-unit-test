@@ -1,0 +1,269 @@
+﻿
+
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>航天精一（广东）信息科技有限公司项目管理系统 - 系统登录</title>
+    <link rel="apple-touch-icon-precomposed" href="/Areas/Phone/img/favico.ico" />
+    <link rel="shortcut icon" href="/Areas/Phone/img/favico.ico" />
+    <script src="/Scripts/JQuery/jquery-1.11.1.min.js"></script>
+    <script src="/Scripts/jquery-easyui/custom/jquery.easyui.query.js?v=20180823"></script>
+    <link href="/Content/CSS/login.css?v=20180823" rel="stylesheet" />
+    <link href="/Content/CSS/font-awesome.css?v=20180823" rel="stylesheet" />
+    <script type="text/javascript" src="/Scripts/lib/power/tip/jquery.power.tip.js?v=20180823"></script>
+    <link href="/Scripts/lib/power/tip/tip.css?v=20180823" rel="stylesheet" />
+    <link href="/Content/CSS/layout.css?v=20180823" rel="stylesheet" />
+    <script src="/Scripts/lib/cryptoRSA/jsencrypt.min.js?v=20180823"></script>
+    <script src="/Scripts/lib/login.js?v=20180823"></script>
+    <script src="/Scripts/lib/jsviews/jsrender.js?v=20180823"></script>
+    <link href="/Scripts/jBox/Skins/Blue/jbox.css" rel="stylesheet" />
+    <script src="/Scripts/jBox/jquery.jBox-2.3.min.js"></script>
+    <script src="/Scripts/jBox/i18n/jquery.jBox-zh-CN.js"></script>
+
+    <style>
+        #loginContent { height:283px; margin: auto; position: absolute; top: 0; left: 0; bottom: 0; right: 0; }
+    </style>
+
+    <script type="text/javascript">
+
+        window.closeJbox = function () {
+            $.jBox.close();
+        }
+        window.showTip = function (msg, type) {
+            $.power.tip(msg, type);
+        }
+        var pageApp = {
+            settings: {
+                caLoginEnabled_Norinco: "False" == "True",
+                action_LoginPost: "/MvcPages/Home/LoginPost",
+                action_CaLogin: "/MvcPages/Home/CaLogin",
+                action_GetLogo: "/MvcPages/Home/GetLogo",
+                action_SendPasswordMail: "/MvcPages/Home/SendPasswordMail"
+            },
+            init: function () {
+
+                this.initControls();
+                this.initEvents();
+            },
+            initControls: function () {
+                if (pageApp.settings.caLoginEnabled_Norinco) {
+                    $("#defaultLogin_form").hide();
+                    $("#CALogin_form").show();
+                    return;
+                }
+                else {
+                    $("#defaultLogin_form").show();
+                    $("#CALogin_form").hide();
+                }
+
+                $("#UserId").focus();
+
+            },
+            initEvents: function () {
+
+                var $validateCode = $("#validateCode")
+                $validateCode.attr("src", "/ajax/Authorization/GetValidateCode/" + Math.floor(Math.random() * (100000 + 1)));
+                $validateCode.click(function () {
+                    $validateCode.attr("src", "/ajax/Authorization/GetValidateCode/" + Math.floor(Math.random() * (100000 + 1)));
+                });
+
+                $("#btnForgetPassword").on("click", function () {
+                    var html = $("#forgetPassword_template").render();
+                    $.jBox(html, {
+                        title: '忘记密码',
+                        width: 600,
+                        buttons: { '发送': 'ok', '取消': 'c' },
+                        loaded: function (h) {
+                            var $h = $(h);
+                            $.post(pageApp.settings.action_GetLogo, {}, function (data) {
+                                $h.find("#ltlLogo").html(data);
+                            });
+                        },
+                        submit: function (v, h, f) {
+                            if (v == 'ok') {
+                                if (f.UserId == "") {
+                                    $.power.tip("请正确填写.", "warning");
+                                    return false;
+                                }
+                                $.post(pageApp.settings.action_SendPasswordMail, { userId: f.UserId }, function (data) {
+                                    if (!data.IsSuccess) {
+                                        $.power.tip(data.Message, 'warning');
+                                        return false;
+                                    }
+                                    $.jBox.close();
+                                    $.power.tip(data.Message);
+                                })
+                            }
+                            else {
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
+                });
+
+                //登陆方式切换
+                $('input[name=loginType]').on('change', function () {
+                    if ($(this).val() == "AdminLogin") {
+                        $("#adminPassword").show();
+                        $("#CASubmit").val("登陆");
+                    }
+                    else {
+                        $("#adminPassword").hide();
+                        $("#CASubmit").val("证书登陆");
+                    }
+                });
+
+                //证书方式登陆
+                $("#CASubmit").on('click', (function () {
+                    var loginType = $('input[name=loginType]:checked').val();
+                    var password = $('#CAPassword').val();
+
+                    //验证客户端证书
+                    $.post(pageApp.settings.action_CaLogin, { loginType: loginType, password: password }, function (result) {
+
+                        if (!result.IsSuccess) {
+                            $.power.tip(result.Message, "warning");
+                            return;
+                        }
+                        else {
+                            $.power.tip("登录成功，正在跳转...", "loading");
+                                window.location.href = "/Users/UserHome/Index";
+                        }
+                    });
+                })
+                );
+
+                //普通登陆
+                $("#loginContent").submit(function () {
+
+                    var self = this;
+                    var data = $(self).queryParams();
+
+                    if (!data.UserId) {
+                        $.power.tip('请输入登录名', "warning");
+                        $("#UserId").focus();
+                        return false;
+                    }
+
+                    if (!data.Password) {
+                        $.power.tip('请输入密码', "warning");
+                        $("#Password").focus();
+                        return false;
+                    }
+
+
+                    //rsa加密
+                    var publicKey = login.pubkey;
+                    var encrypt = new JSEncrypt();
+                    encrypt.setPublicKey(publicKey);
+                    data.Password = encrypt.encrypt(data.Password);
+
+                    $.power.tip("正在登录...", "loading");
+                    $.post(pageApp.settings.action_LoginPost, data, function (d) {
+                        $.power.closeTip();
+                        $validateCode.click();
+
+                        if (d.success) {
+                            $.power.tip("登录成功，正在跳转...", "loading");
+                                window.location.href = "/Users/UserHome/Index";
+                        } else if (d.error) {
+                            $.power.tip(d.error, "warning");
+                        } else if (d.info == '修改初始密码') {
+                            $.power.tip('首次登录需要修改密码', "loading");
+                            $.jBox('iframe:/MvcPages/Home/ChangePasswordView?userId=' +encodeURIComponent(data.UserId) , {
+                                title: '重置密码',
+                                width: 340,
+                                height: 220,
+                                top:'30%',
+                                loaded: function (h) {
+                                    $.power.closeTip();
+                                },
+                                submit: function (v, h, f) {
+                                },
+                                buttons: { }
+                            });
+                        };
+                    })
+
+                    return false;
+                });
+            }
+        };
+
+        $(function () {
+            pageApp.init();
+        })
+    </script>
+
+    <script id="forgetPassword_template" type="text/x-jsrender">
+        <div style="height: 60px;">
+            <label id="ltlLogo"></label>
+        </div>
+        <div style="margin-left:50px;">
+            <span>用户名：</span>
+            <input type="text" name="UserId" class="input_text_new" style="width:150px;" />
+            <span style="margin-left:10px;color:red;">请确保填写正确的用户名，否则将无法收到邮件！</span>
+        </div>
+    </script>
+</head>
+<body>
+    <div class="login_container" style="background: url(/Content/Images/Customs/LoginBg/Enterprise_login_bg.jpg) fixed center center no-repeat;">
+        <div class="login_logo">
+            <img src="/Content/Images/Customs/Logo/Enterprise_Logo.png" width="350" height="50" alt="" />
+        </div>
+        <form id="loginContent" class="login_content" action="/MvcPages/Home/Login" method="post">
+<input name="__RequestVerificationToken" type="hidden" value="tCpz_MrI5cNzjv3o4OJHSI5xoQ9Dd8QQNdRW07M04vXdt08WsIDsiL1Nz2zvaQQDlhXZMwY3AIBvc-cWQXtwJ2CaYf-44cup_u14TM8ij0Y1" />            <h3>登 录</h3>
+            <div class="login_form" id="defaultLogin_form">
+                <div>
+                    <label for="UserId">登录名</label>
+                    <input name="UserId" type="text" id="UserId">
+                </div>
+                <div>
+                    <label for="Password">密码</label>
+                    <input name="Password" type="password" id="Password">
+                </div>
+                <div>
+                    <div class="remember_password">
+                        <label>
+                            <input type="checkbox" value="true" name="rememberMe" checked="checked" />
+                            记住密码
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <input type="submit" value="登录" class="login_btn" style="border:0px;cursor:pointer" />
+                </div>
+                    <div>
+                        <div class="login_password" style="margin:0px;">
+                            <a id="btnForgetPassword" href="javascript:void(0)">
+                                <i class="fa fa-question-circle fa-fw"></i> 忘记密码
+                            </a>
+                        </div>
+                    </div>
+            </div>
+            <div class="login_form" id="CALogin_form">
+                <div>
+                    <input type="radio" name="loginType" checked="checked" value="CA" />证书登陆
+                    <input type="radio" name="loginType" value="AdminLogin" />管理员登陆
+                </div>
+                <div id="adminPassword" style="display:none">
+                    <label for="CAPassword">管理员密码</label>
+                    <input name="CAPassword" type="password" id="CAPassword">
+                </div>
+                <div>
+                    <input id="CASubmit" type="submit" value="登录" class="login_btn" style="border:0px;cursor:pointer" />
+                </div>
+            </div>
+
+        </form>
+        <div id="footer">
+             Copyright &#169; 2008-2018 航天精一（广东）信息科技有限公司 Version 2.0 Build 2018.0823 
+        </div>
+    </div>
+</body>
+</html>
+
